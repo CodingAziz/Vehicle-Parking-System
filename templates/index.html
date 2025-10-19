@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+{% block content %}
+<h3>🅿️ Current Parked Vehicles</h3>
+<table class="table table-striped mt-3">
+  <thead>
+    <tr>
+      <th>Plate</th><th>Type</th><th>Slot</th><th>Entry Time</th><th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in parked %}
+      <tr>
+        <td>{{ r.plate_number }}</td>
+        <td>{{ r.slot_type }}</td>
+        <td>{{ r.slot_id }}</td>
+        <td>{{ r.entry_time }}</td>
+        <td><a href="/exit_vehicle/{{ r.record_id }}" class="btn btn-sm btn-danger">Exit</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="text-center text-muted">No vehicles currently parked.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block content %}
+<h3>🅿️ Park a Vehicle</h3>
+<form method="POST" class="mt-3">
+  <div class="mb-3">
+    <label class="form-label">Select Vehicle</label>
+    <select name="vehicle_id" class="form-control" required>
+      <option value="">Select Vehicle</option>
+      {% for v in vehicles %}
+        <option value="{{ v.vehicle_id }}">{{ v.plate_number }} - {{ v.vehicle_type }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Select Parking Slot</label>
+    <select name="slot_id" class="form-control" required>
+      <option value="">Select Slot</option>
+      {% for s in slots %}
+        <option value="{{ s.slot_id }}">{{ s.slot_type }} - Slot {{ s.slot_id }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button class="btn btn-success">Park Vehicle</button>
+</form>
+{% endblock %}

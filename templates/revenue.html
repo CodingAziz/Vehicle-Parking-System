@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block content %}
+<h3>💰 Revenue Report</h3>
+<table class="table table-bordered mt-3">
+  <thead>
+    <tr><th>Plate</th><th>Type</th><th>Entry</th><th>Exit</th><th>Fee (₹)</th></tr>
+  </thead>
+  <tbody>
+    {% for r in data %}
+      <tr>
+        <td>{{ r.plate }}</td>
+        <td>{{ r.type }}</td>
+        <td>{{ r.entry }}</td>
+        <td>{{ r.exit }}</td>
+        <td>{{ r.fee }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h5 class="text-end mt-3">Total Revenue: ₹{{ total_revenue }}</h5>
+{% endblock %}

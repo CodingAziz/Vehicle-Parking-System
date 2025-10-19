@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+{% block content %}
+<h3>🚙 Add Vehicle</h3>
+<form method="POST" class="mt-3">
+  <div class="mb-3">
+    <label class="form-label">Plate Number</label>
+    <input type="text" name="plate_number" class="form-control" required>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Vehicle Type</label>
+    <select name="vehicle_type" class="form-control" required>
+      <option value="">Select Type</option>
+      <option value="Car">Car</option>
+      <option value="Bike">Bike</option>
+      <option value="Truck">Truck</option>
+    </select>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Owner Name</label>
+    <input type="text" name="owner_name" class="form-control" required>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Phone Number</label>
+    <input type="text" name="phone_number" class="form-control" pattern="[0-9]{10}" required>
+  </div>
+  <button class="btn btn-primary">Add Vehicle</button>
+</form>
+{% endblock %}
