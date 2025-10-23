@@ -1,10 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
 import sqlite3
 from datetime import datetime
+import os
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
 DB = "parking.db"
+
 
 def get_db():
     conn = sqlite3.connect(DB)
@@ -60,11 +62,16 @@ def reset_database():
     print("✅ Database reset and initialized.")
 
 
+# ✅ Initialize DB once at server startup if file does not exist
+if not os.path.exists(DB):
+    reset_database()
+else:
+    print("ℹ️ Existing database found, skipping reset.")
+
+
 @app.route('/')
 def index():
-    reset_database()  # Drop + recreate tables every refresh
     conn = get_db()
-
     vehicles = conn.execute("SELECT * FROM vehicles").fetchall()
     parked = conn.execute("""
         SELECT pr.*, v.plate_number, ps.slot_type 
