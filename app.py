@@ -3,14 +3,14 @@ import sqlite3
 from datetime import datetime
 import os
 
-app = Flask(__name__)
+app = Flask(__name__) # Initialise Flask App
 app.secret_key = "supersecretkey"
-DB = "parking.db"
+DB = "parking.db" 
 
 
 def get_db():
     conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = sqlite3.Row # Create the db row
     return conn
 
 
@@ -54,24 +54,22 @@ def reset_database():
     )
     """)
 
-    # Initialize 6 slots
     slots = [('Car',), ('Car',), ('Car',), ('Bike',), ('Bike',), ('Truck',)]
     c.executemany("INSERT INTO parking_slots (slot_type) VALUES (?)", slots)
     conn.commit()
     conn.close()
-    print("✅ Database reset and initialized.")
 
 
-# ✅ Initialize DB once at server startup if file does not exist
+# Initialize DB once at server startup if file does not exist
 if not os.path.exists(DB):
     reset_database()
 else:
-    print("ℹ️ Existing database found, skipping reset.")
+    print("Existing database found, skipping reset.")
 
 
 @app.route('/')
 def index():
-    conn = get_db()
+    conn = get_db() 
     vehicles = conn.execute("SELECT * FROM vehicles").fetchall()
     parked = conn.execute("""
         SELECT pr.*, v.plate_number, ps.slot_type 
@@ -93,7 +91,7 @@ def add_vehicle():
         phone_number = request.form.get('phone_number', '').strip()
 
         if not all([plate_number, vehicle_type, owner_name, phone_number]):
-            flash("⚠️ All fields are required.", "error")
+            flash("All fields are required.", "error")
             return redirect(url_for('add_vehicle'))
 
         conn = get_db()
@@ -103,9 +101,9 @@ def add_vehicle():
                 VALUES (?, ?, ?, ?)
             """, (plate_number, vehicle_type, owner_name, phone_number))
             conn.commit()
-            flash("✅ Vehicle added successfully.", "success")
+            flash("Vehicle added successfully.", "success")
         except sqlite3.IntegrityError:
-            flash("❌ Vehicle with this plate number already exists.", "error")
+            flash("Vehicle with this plate number already exists.", "error")
         finally:
             conn.close()
         return redirect(url_for('index'))
@@ -124,14 +122,14 @@ def park_vehicle():
         slot_id = request.form.get('slot_id')
 
         if not vehicle_id or not slot_id:
-            flash("⚠️ Select both vehicle and slot.", "error")
+            flash("Select both vehicle and slot.", "error")
             return redirect(url_for('park_vehicle'))
 
         conn.execute("INSERT INTO parking_records (vehicle_id, slot_id) VALUES (?, ?)", (vehicle_id, slot_id))
         conn.execute("UPDATE parking_slots SET is_occupied = 1 WHERE slot_id = ?", (slot_id,))
         conn.commit()
         conn.close()
-        flash("✅ Vehicle parked successfully.", "success")
+        flash("Vehicle parked successfully.", "success")
         return redirect(url_for('index'))
 
     conn.close()
@@ -141,18 +139,30 @@ def park_vehicle():
 @app.route('/exit_vehicle/<int:record_id>')
 def exit_vehicle(record_id):
     conn = get_db()
-    record = conn.execute("SELECT * FROM parking_records WHERE record_id = ?", (record_id,)).fetchone()
+    record = conn.execute("""
+        SELECT pr.*, v.vehicle_type, ps.slot_type
+        FROM parking_records pr
+        JOIN vehicles v ON pr.vehicle_id = v.vehicle_id
+        JOIN parking_slots ps ON pr.slot_id = ps.slot_id
+        WHERE pr.record_id = ?
+    """, (record_id,)).fetchone()
     if record:
-        entry_time = datetime.fromisoformat(record['entry_time'])
-        hours = max((datetime.now() - entry_time).total_seconds() / 3600, 1)
-        fee = round(hours * 20, 2)
-        conn.execute("""
-            UPDATE parking_records SET exit_time = CURRENT_TIMESTAMP, total_fee = ?
-            WHERE record_id = ?
-        """, (fee, record_id))
-        conn.execute("UPDATE parking_slots SET is_occupied = 0 WHERE slot_id = ?", (record['slot_id'],))
-        conn.commit()
-        flash(f"🚗 Vehicle exited. Fee: ₹{fee}", "info")
+      entry_time = datetime.fromisoformat(record['entry_time'])
+      hours = max((datetime.now() - entry_time).total_seconds() / 3600, 1)
+
+      RATE = {"Car": 20, "Bike": 10, "Truck": 30}
+      hourly_rate = RATE.get(record['vehicle_type'], 20)
+      fee = round(hours * hourly_rate, 2)
+
+      conn.execute("""
+          UPDATE parking_records 
+          SET exit_time = CURRENT_TIMESTAMP, total_fee = ?
+          WHERE record_id = ?
+      """, (fee, record_id))
+
+      conn.execute("UPDATE parking_slots SET is_occupied = 0 WHERE slot_id = ?", (record['slot_id'],))
+      conn.commit()
+      flash(f"Vehicle exited. Fee: ₹{fee}", "info")
     conn.close()
     return redirect(url_for('index'))
 
@@ -161,14 +171,18 @@ def exit_vehicle(record_id):
 def revenue():
     conn = get_db()
     records = conn.execute("""
-        SELECT pr.*, v.plate_number, v.vehicle_type, ps.slot_type
-        FROM parking_records pr
-        JOIN vehicles v ON pr.vehicle_id = v.vehicle_id
-        JOIN parking_slots ps ON pr.slot_id = ps.slot_id
+    SELECT pr.*, v.plate_number, v.vehicle_type, ps.slot_type
+    FROM parking_records pr
+    JOIN vehicles v ON pr.vehicle_id = v.vehicle_id
+    JOIN parking_slots ps ON pr.slot_id = ps.slot_id
     """).fetchall()
     conn.close()
 
-    RATE = {"Car": 20, "Bike": 10, "Truck": 30}
+    RATE = {
+    "Car": 20,
+    "Bike": 10,
+    "Truck": 30
+    }
 
     data = []
     total_revenue = 0
@@ -177,7 +191,11 @@ def revenue():
         entry = datetime.fromisoformat(r["entry_time"])
         exit_time = datetime.fromisoformat(r["exit_time"]) if r["exit_time"] else datetime.now()
         hours = (exit_time - entry).total_seconds() / 3600
-        fee = round(hours * RATE.get(r["vehicle_type"], 20), 2)
+
+        # use joined vehicle_type to pick correct rate
+        hourly_rate = RATE.get(r["vehicle_type"], 20)
+        fee = round(hours * hourly_rate, 2)
+
         data.append({
             "plate": r["plate_number"],
             "type": r["vehicle_type"],
