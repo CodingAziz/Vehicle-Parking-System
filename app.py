@@ -1,11 +1,80 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+import hashlib
+from flask_dance.contrib.github import make_github_blueprint, github
+from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_dance.contrib.google import make_google_blueprint, google
 import sqlite3
 from datetime import datetime
 import os
 
+
 app = Flask(__name__) # Initialise Flask App
+
 app.secret_key = "supersecretkey"
-DB = "parking.db" 
+DB = "parking.db"
+
+
+# Google OAuth setup (replace with your credentials or use env vars)
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "your-client-id")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET", "your-client-secret")
+google_bp = make_google_blueprint(
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
+    scope=["profile", "email"],
+    redirect_url="/login/google/authorized"
+)
+app.register_blueprint(google_bp, url_prefix="/login")
+
+# GitHub OAuth setup (replace with your credentials or use env vars)
+GITHUB_CLIENT_ID = os.environ.get("GITHUB_OAUTH_CLIENT_ID", "your-github-client-id")
+GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_OAUTH_CLIENT_SECRET", "your-github-client-secret")
+github_bp = make_github_blueprint(
+    client_id=GITHUB_CLIENT_ID,
+    client_secret=GITHUB_CLIENT_SECRET,
+    scope="user:email",
+    redirect_url="/login/github/authorized"
+)
+app.register_blueprint(github_bp, url_prefix="/login")
+
+# Flask-Login setup
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# Simple User class for demonstration
+class User(UserMixin):
+    def __init__(self, id, username, password):
+        self.id = id
+        self.username = username
+        self.password = password
+
+
+
+# For demo: In-memory user store (replace with DB for production)
+# Passwords are stored as MD5 hashes
+def hash_password(password):
+    return hashlib.md5(password.encode()).hexdigest()
+
+# Example: admin user with MD5
+USERS = {
+    "admin": User(id=1, username="admin", password=hash_password("adminpass"))
+}
+
+
+# Helper to get or create user from Google/GitHub OAuth
+def get_or_create_oauth_user(email):
+    user = USERS.get(email)
+    if not user:
+        user = User(id=len(USERS)+1, username=email, password=None)
+        USERS[email] = user
+    return user
+
+@login_manager.user_loader
+def load_user(user_id):
+    for user in USERS.values():
+        if str(user.id) == str(user_id):
+            return user
+    return None
 
 
 def get_db():
@@ -61,10 +130,79 @@ def reset_database():
 
 
 # Initialize DB once at server startup if file does not exist
+
 if not os.path.exists(DB):
     reset_database()
 else:
     print("Existing database found, skipping reset.")
+
+# --- Authentication routes ---
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        user = USERS.get(username)
+        if user and user.password:
+            hashed = hash_password(password)
+            if hashed == user.password:
+                login_user(user)
+                flash('Logged in successfully.', 'success')
+                next_page = request.args.get('next')
+                return redirect(next_page or url_for('index'))
+        flash('Invalid username or password.', 'error')
+        return redirect(url_for('login'))
+    return render_template('login.html')
+
+
+# Google OAuth login route
+@app.route('/login/google')
+def login_google():
+    if not google.authorized:
+        return redirect(url_for('google.login'))
+    resp = google.get('/oauth2/v2/userinfo')
+    if resp.ok:
+        email = resp.json()["email"]
+        user = get_or_create_oauth_user(email)
+        login_user(user)
+        flash(f"Logged in as {email} via Google.", "success")
+        return redirect(url_for('index'))
+    flash("Google login failed.", "error")
+    return redirect(url_for('login'))
+
+# GitHub OAuth login route
+@app.route('/login/github')
+def login_github():
+    if not github.authorized:
+        return redirect(url_for('github.login'))
+    resp = github.get('/user')
+    if resp.ok:
+        github_info = resp.json()
+        email = github_info.get('email')
+        # If email is not public, fetch from /emails endpoint
+        if not email:
+            emails_resp = github.get('/user/emails')
+            if emails_resp.ok:
+                emails = emails_resp.json()
+                email = next((e['email'] for e in emails if e['primary']), None)
+        if email:
+            user = get_or_create_oauth_user(email)
+            login_user(user)
+            flash(f"Logged in as {email} via GitHub.", "success")
+            return redirect(url_for('index'))
+        else:
+            flash("Could not retrieve email from GitHub.", "error")
+    else:
+        flash("GitHub login failed.", "error")
+    return redirect(url_for('login'))
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('Logged out.', 'info')
+    return redirect(url_for('login'))
 
 
 @app.route('/')
@@ -83,6 +221,7 @@ def index():
 
 
 @app.route('/add_vehicle', methods=['GET', 'POST'])
+@login_required
 def add_vehicle():
     if request.method == 'POST':
         plate_number = request.form.get('plate_number', '').strip()
@@ -112,6 +251,7 @@ def add_vehicle():
 
 
 @app.route('/park_vehicle', methods=['GET', 'POST'])
+@login_required
 def park_vehicle():
     conn = get_db()
     vehicles = conn.execute("SELECT * FROM vehicles").fetchall()
@@ -137,6 +277,7 @@ def park_vehicle():
 
 
 @app.route('/exit_vehicle/<int:record_id>')
+@login_required
 def exit_vehicle(record_id):
     conn = get_db()
     record = conn.execute("""
@@ -168,6 +309,7 @@ def exit_vehicle(record_id):
 
 
 @app.route('/revenue')
+@login_required
 def revenue():
     conn = get_db()
     records = conn.execute("""
