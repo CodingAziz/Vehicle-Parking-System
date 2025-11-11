@@ -15,15 +15,16 @@ c.execute('''CREATE TABLE IF NOT EXISTS users (
     email TEXT UNIQUE NOT NULL
 )''')
 
-# Vehicles table linked to user_id
+# Vehicles table linked to user_id, plate_number unique per user
 c.execute('''CREATE TABLE IF NOT EXISTS vehicles (
     vehicle_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    plate_number TEXT UNIQUE NOT NULL,
+    plate_number TEXT NOT NULL,
     vehicle_type TEXT,
     owner_name TEXT,
     phone_number TEXT,
     user_id INTEGER NOT NULL,
-    FOREIGN KEY(user_id) REFERENCES users(user_id)
+    FOREIGN KEY(user_id) REFERENCES users(user_id),
+    UNIQUE(plate_number, user_id)
 )''')
 
 c.execute('''CREATE TABLE IF NOT EXISTS parking_slots (

@@ -13,6 +13,16 @@
         <a href="/park_vehicle" class="btn btn-outline-info btn-sm mx-1">Park</a>
         <a href="/revenue" class="btn btn-outline-warning btn-sm mx-1">💰 Revenue</a>
         <a href="/logout" class="btn btn-outline-danger btn-sm mx-1">Logout</a>
+        <form id="deleteAccountForm" action="/delete_account" method="POST" style="display:inline;">
+          <button type="button" class="btn btn-outline-secondary btn-sm mx-1" onclick="confirmDeleteAccount()">Delete Account</button>
+        </form>
+        <script>
+          function confirmDeleteAccount() {
+            if (confirm('Are you sure you want to delete your account and all your data? This action cannot be undone.')) {
+              document.getElementById('deleteAccountForm').submit();
+            }
+          }
+        </script>
       {% else %}
         <a href="/signup" class="btn btn-outline-primary btn-sm mx-2">Sign Up</a>
         <a href="/login" class="btn btn-outline-success btn-sm mx-2">Login</a>

@@ -134,7 +134,8 @@ def reset_database():
 if not os.path.exists(DB):
     reset_database()
 else:
-    print("Existing database found, skipping reset.")
+    print("Existing database found, not resetting.")
+
 
 # Sign-up route
 @app.route('/signup', methods=['GET', 'POST'])
@@ -164,6 +165,24 @@ def signup():
         flash('Account created! Please log in.', 'success')
         return redirect(url_for('login'))
     return render_template('signup.html')
+
+# Delete account route (grouped with user/account management)
+@app.route('/delete_account', methods=['POST'])
+@login_required
+def delete_account():
+    user_id = current_user.id
+    conn = get_db()
+    c = conn.cursor()
+    # Delete user's vehicles and parking records
+    c.execute('DELETE FROM parking_records WHERE user_id=?', (user_id,))
+    c.execute('DELETE FROM vehicles WHERE user_id=?', (user_id,))
+    # Delete user account
+    c.execute('DELETE FROM users WHERE user_id=?', (user_id,))
+    conn.commit()
+    conn.close()
+    logout_user()
+    flash('Your account and all associated data have been deleted.', 'info')
+    return redirect(url_for('signup'))
 
 # --- Authentication routes ---
 
