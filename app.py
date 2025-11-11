@@ -296,12 +296,20 @@ def add_vehicle():
             flash("All fields are required.", "error")
             return redirect(url_for('add_vehicle'))
 
+        user_id = current_user.id
         conn = get_db()
+        c = conn.cursor()
+        # Check for existing plate for this user only
+        exists = c.execute("SELECT 1 FROM vehicles WHERE plate_number=? AND user_id=?", (plate_number, user_id)).fetchone()
+        if exists:
+            flash("Vehicle with this plate number already exists.", "error")
+            conn.close()
+            return redirect(url_for('add_vehicle'))
         try:
-            conn.execute("""
-                INSERT INTO vehicles (plate_number, vehicle_type, owner_name, phone_number)
-                VALUES (?, ?, ?, ?)
-            """, (plate_number, vehicle_type, owner_name, phone_number))
+            c.execute("""
+                INSERT INTO vehicles (plate_number, vehicle_type, owner_name, phone_number, user_id)
+                VALUES (?, ?, ?, ?, ?)
+            """, (plate_number, vehicle_type, owner_name, phone_number, user_id))
             conn.commit()
             flash("Vehicle added successfully.", "success")
         except sqlite3.IntegrityError:
@@ -316,19 +324,42 @@ def add_vehicle():
 @app.route('/park_vehicle', methods=['GET', 'POST'])
 @login_required
 def park_vehicle():
+
     conn = get_db()
-    vehicles = conn.execute("SELECT * FROM vehicles").fetchall()
+    vehicles = conn.execute("SELECT * FROM vehicles WHERE user_id=?", (current_user.id,)).fetchall()
     slots = conn.execute("SELECT * FROM parking_slots WHERE is_occupied = 0").fetchall()
 
     if request.method == 'POST':
         vehicle_id = request.form.get('vehicle_id')
         slot_id = request.form.get('slot_id')
 
-        if not vehicle_id or not slot_id:
-            flash("Select both vehicle and slot.", "error")
+        # If no slot selected, try to find or create one for the vehicle type
+        if not vehicle_id:
+            flash("Select a vehicle.", "error")
+            conn.close()
             return redirect(url_for('park_vehicle'))
 
-        conn.execute("INSERT INTO parking_records (vehicle_id, slot_id) VALUES (?, ?)", (vehicle_id, slot_id))
+        # Get vehicle type
+        vehicle = conn.execute("SELECT * FROM vehicles WHERE vehicle_id=?", (vehicle_id,)).fetchone()
+        if not vehicle:
+            flash("Vehicle not found.", "error")
+            conn.close()
+            return redirect(url_for('park_vehicle'))
+        vehicle_type = vehicle['vehicle_type']
+
+        # If no slot selected, try to find a free slot of the same type
+        if not slot_id:
+            slot = conn.execute("SELECT * FROM parking_slots WHERE is_occupied=0 AND slot_type=?", (vehicle_type,)).fetchone()
+            if not slot:
+                # Dynamically add a slot for this type
+                conn.execute("INSERT INTO parking_slots (slot_type, is_occupied) VALUES (?, 0)", (vehicle_type,))
+                conn.commit()
+                slot = conn.execute("SELECT * FROM parking_slots WHERE is_occupied=0 AND slot_type=? ORDER BY slot_id DESC", (vehicle_type,)).fetchone()
+                flash(f"No free slot available for {vehicle_type}. Added a new slot.", "info")
+            slot_id = slot['slot_id']
+
+        user_id = current_user.id
+        conn.execute("INSERT INTO parking_records (vehicle_id, slot_id, user_id) VALUES (?, ?, ?)", (vehicle_id, slot_id, user_id))
         conn.execute("UPDATE parking_slots SET is_occupied = 1 WHERE slot_id = ?", (slot_id,))
         conn.commit()
         conn.close()
@@ -351,22 +382,22 @@ def exit_vehicle(record_id):
         WHERE pr.record_id = ?
     """, (record_id,)).fetchone()
     if record:
-      entry_time = datetime.fromisoformat(record['entry_time'])
-      hours = max((datetime.now() - entry_time).total_seconds() / 3600, 1)
+        entry_time = datetime.fromisoformat(record['entry_time'])
+        hours = max((datetime.now() - entry_time).total_seconds() / 3600, 1)
 
-      RATE = {"Car": 20, "Bike": 10, "Truck": 30}
-      hourly_rate = RATE.get(record['vehicle_type'], 20)
-      fee = round(hours * hourly_rate, 2)
+        RATE = {"Car": 20, "Bike": 10, "Truck": 30}
+        hourly_rate = RATE.get(record['vehicle_type'], 20)
+        fee = int(round(hours * hourly_rate))
 
-      conn.execute("""
-          UPDATE parking_records 
-          SET exit_time = CURRENT_TIMESTAMP, total_fee = ?
-          WHERE record_id = ?
-      """, (fee, record_id))
+        conn.execute("""
+            UPDATE parking_records 
+            SET exit_time = CURRENT_TIMESTAMP, total_fee = ?
+            WHERE record_id = ?
+        """, (fee, record_id))
 
-      conn.execute("UPDATE parking_slots SET is_occupied = 0 WHERE slot_id = ?", (record['slot_id'],))
-      conn.commit()
-      flash(f"Vehicle exited. Fee: ₹{fee}", "info")
+        conn.execute("UPDATE parking_slots SET is_occupied = 0 WHERE slot_id = ?", (record['slot_id'],))
+        conn.commit()
+        flash(f"Vehicle exited. Fee: ₹{fee}", "info")
     conn.close()
     return redirect(url_for('index'))
 
@@ -384,9 +415,9 @@ def revenue():
     conn.close()
 
     RATE = {
-    "Car": 20,
-    "Bike": 10,
-    "Truck": 30
+        "Car": 20,
+        "Bike": 10,
+        "Truck": 30
     }
 
     data = []
@@ -395,11 +426,10 @@ def revenue():
     for r in records:
         entry = datetime.fromisoformat(r["entry_time"])
         exit_time = datetime.fromisoformat(r["exit_time"]) if r["exit_time"] else datetime.now()
-        hours = (exit_time - entry).total_seconds() / 3600
+        hours = max((exit_time - entry).total_seconds() / 3600, 1)
 
-        # use joined vehicle_type to pick correct rate
         hourly_rate = RATE.get(r["vehicle_type"], 20)
-        fee = round(hours * hourly_rate, 2)
+        fee = int(round(hours * hourly_rate))
 
         data.append({
             "plate": r["plate_number"],
@@ -410,7 +440,7 @@ def revenue():
         })
         total_revenue += fee
 
-    return render_template("revenue.html", data=data, total_revenue=round(total_revenue, 2))
+    return render_template("revenue.html", data=data, total_revenue=int(round(total_revenue)))
 
 
 if __name__ == '__main__':

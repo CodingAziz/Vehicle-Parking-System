@@ -48,7 +48,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS parking_records (
     FOREIGN KEY(user_id) REFERENCES users(user_id)
 )''')
 
-# Initialize a few slots
-c.executemany("INSERT INTO parking_slots (slot_type) VALUES (?)", [('Car',), ('Car',), ('Bike',), ('Bike',)])
+slots = [('Car',)] * 10 + [('Truck',)] * 5 + [('Bike',)] * 8
+c.executemany("INSERT INTO parking_slots (slot_type) VALUES (?)", slots)
 conn.commit()
 conn.close()
