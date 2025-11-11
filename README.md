@@ -1,10 +1,10 @@
-# 🅿️ Vehicle Parking System – Database Setup
+# Vehicle Parking System – Database Setup
 
 This script (`db_setup.py`) creates and initializes the SQLite database used by the Vehicle Parking Management System.
 
 ---
 
-## ⚙️ Purpose
+## Purpose
 
 The main goal of `db_setup.py` is to:
 - Create the **parking.db** database file.
@@ -13,7 +13,7 @@ The main goal of `db_setup.py` is to:
 
 ---
 
-## 🧱 Database Tables
+## Database Tables
 
 ### 1. `vehicles`
 Stores information about registered vehicles.
@@ -53,16 +53,9 @@ Logs each parking event for a vehicle.
 
 ---
 
-## 🏗️ How It Works
+## How It Works
 
 1. Connects to SQLite (`parking.db`)
 2. Creates the three tables if they don’t exist
 3. Adds default slots (2 Car slots, 2 Bike slots)
 4. Saves and closes the database connection
-
----
-
-## ▶️ How to Run
-
-```bash
-python db_setup.py
