@@ -9,13 +9,13 @@
     <a href="/" class="navbar-brand">Smart Parking</a>
     <div class="ms-auto d-flex align-items-center">
       {% if current_user.is_authenticated %}
-        <span class="text-light me-2">Logged in as <b>{{ current_user.username }}</b></span>
         <a href="/add_vehicle" class="btn btn-outline-light btn-sm mx-1">+ Add Vehicle</a>
         <a href="/park_vehicle" class="btn btn-outline-info btn-sm mx-1">Park</a>
         <a href="/revenue" class="btn btn-outline-warning btn-sm mx-1">💰 Revenue</a>
         <a href="/logout" class="btn btn-outline-danger btn-sm mx-1">Logout</a>
       {% else %}
-        <a href="/login" class="btn btn-outline-success btn-sm mx-1">Login</a>
+        <a href="/signup" class="btn btn-outline-primary btn-sm mx-2">Sign Up</a>
+        <a href="/login" class="btn btn-outline-success btn-sm mx-2">Login</a>
       {% endif %}
     </div>
   </nav>

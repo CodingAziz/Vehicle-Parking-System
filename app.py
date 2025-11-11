@@ -136,6 +136,35 @@ if not os.path.exists(DB):
 else:
     print("Existing database found, skipping reset.")
 
+# Sign-up route
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        first_name = request.form.get('first_name', '').strip()
+        last_name = request.form.get('last_name', '').strip()
+        email = request.form.get('email', '').strip()
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        if not all([first_name, last_name, email, username, password]):
+            flash('All fields are required.', 'error')
+            return redirect(url_for('signup'))
+        conn = get_db()
+        c = conn.cursor()
+        # Check for existing username/email
+        exists = c.execute('SELECT 1 FROM users WHERE username=? OR email=?', (username, email)).fetchone()
+        if exists:
+            flash('Username or email already exists.', 'error')
+            conn.close()
+            return redirect(url_for('signup'))
+        hashed_pw = hashlib.md5(password.encode()).hexdigest()
+        c.execute('''INSERT INTO users (username, password, first_name, last_name, email)
+                    VALUES (?, ?, ?, ?, ?)''', (username, hashed_pw, first_name, last_name, email))
+        conn.commit()
+        conn.close()
+        flash('Account created! Please log in.', 'success')
+        return redirect(url_for('login'))
+    return render_template('signup.html')
+
 # --- Authentication routes ---
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -143,14 +172,29 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        user = USERS.get(username)
-        if user and user.password:
+        print(f"Login attempt: username={username}, password={password}")
+        conn = get_db()
+        c = conn.cursor()
+        user_row = c.execute('SELECT user_id, username, password FROM users WHERE username=?', (username,)).fetchone()
+        conn.close()
+        if user_row:
+            db_hash = user_row['password']
             hashed = hash_password(password)
-            if hashed == user.password:
-                login_user(user)
-                flash('Logged in successfully.', 'success')
+            print(f"Entered password hash: {hashed}")
+            print(f"DB password hash: {db_hash}")
+            if hashed == db_hash:
+                print("Password match: login successful")
+                # Always use username from DB row
+                user_obj = User(id=user_row['user_id'], username=str(user_row['username']), password=db_hash)
+                print(f"Logging in as: {user_obj.username}")
+                login_user(user_obj)
+                flash(f'Logged in as {user_obj.username}', 'success')
                 next_page = request.args.get('next')
                 return redirect(next_page or url_for('index'))
+            else:
+                print("Password mismatch: login failed")
+        else:
+            print("User not found or missing password")
         flash('Invalid username or password.', 'error')
         return redirect(url_for('login'))
     return render_template('login.html')
